@@ -30,6 +30,28 @@
   @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
   #startOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); color:white; display:flex; justify-content:center; align-items:center; font-size:40px; z-index:2000; text-align:center; cursor:pointer; }
+
+  /* Mobile adjustments for 16:9 and smaller images */
+  @media (max-width: 768px) {
+    body { 
+      width: 100vw; 
+      height: calc(100vw * 9 / 16); 
+      overflow: hidden;
+      position: relative;
+    }
+
+    #stickman { width: 200px !important; bottom: 20px !important; left: 50px !important; }
+    #zombie { width: 120px !important; bottom: 50px !important; right: -100px !important; }
+    .laser { width: 100px !important; bottom: 150px !important; }
+    #title { font-size: 30px !important; }
+    #score { font-size: 20px !important; }
+    #bulletsTxt { font-size: 16px !important; }
+    #hearts { font-size: 16px !important; }
+    #bossHearts { font-size: 20px !important; }
+    #instructions { font-size: 12px !important; padding: 5px !important; }
+    #msg { font-size: 40px !important; }
+    .btn { padding: 12px !important; font-size: 14px !important; }
+  }
 </style>
 </head>
 <body>
@@ -101,7 +123,7 @@ startOverlay.addEventListener("click", () => {
   spawnZombie();
 });
 
-// ✅ Make screen tappable to shoot on mobile
+// Mobile tap to shoot
 document.body.addEventListener("click", () => { if (running && canShoot && !reloading) shoot(); });
 document.body.addEventListener("touchstart", () => { if (running && canShoot && !reloading) shoot(); });
 
@@ -153,7 +175,6 @@ function shoot(){
       laser.src="laser.png"; laser.className="laser";
       document.body.appendChild(laser);
 
-      // ✅ Big explosion always visible on hit (normal or boss zombie)
       const z = zombie.getBoundingClientRect();
       const explosion = document.createElement("img");
       explosion.src = "explosion.png";
@@ -282,7 +303,6 @@ function loseHeart(){
       jumpScareImg.style.zIndex="1";
       jumpScareImg.style.objectFit="cover";
       document.body.appendChild(jumpScareImg);
-      // ✅ Restart by clicking the jumpscare
       jumpScareImg.addEventListener("click", restart);
     }
     showMessage("💀 GAME OVER 💀","red",0);
