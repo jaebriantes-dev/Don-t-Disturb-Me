@@ -101,6 +101,10 @@ startOverlay.addEventListener("click", () => {
   spawnZombie();
 });
 
+// ✅ Make screen tappable to shoot on mobile
+document.body.addEventListener("click", () => { if (running && canShoot && !reloading) shoot(); });
+document.body.addEventListener("touchstart", () => { if (running && canShoot && !reloading) shoot(); });
+
 document.addEventListener("keydown", e => {
   if(!running && e.key.toLowerCase()==='r') restart();
   if(e.key.toLowerCase()==='q' && canShoot && running) shoot();
@@ -149,6 +153,7 @@ function shoot(){
       laser.src="laser.png"; laser.className="laser";
       document.body.appendChild(laser);
 
+      // ✅ Big explosion always visible on hit (normal or boss zombie)
       const z = zombie.getBoundingClientRect();
       const explosion = document.createElement("img");
       explosion.src = "explosion.png";
@@ -214,7 +219,7 @@ function killZombie(){
   setTimeout(()=>{
     score++; scoreTxt.textContent="Score: "+score;
 
-    if(score % 10 === 0){ // ✅ Every 10 points spawn boss
+    if(score % 10 === 0){
       bossMode=true; abnormalMode=true;
       zombieSpeed=2; bossMaxHealth=8; bossHealth=bossMaxHealth;
       zombieHitsRequired=1; bulletsPerShot=3;
@@ -241,10 +246,7 @@ function spawnZombie(){
   zombie.style.animation="";
   zombie.style.opacity=1;
   zombie.style.right="-150px";
-
-  // ✅ Reset health requirement every new normal zombie
   if (!bossMode) zombieHitsRequired = 1;
-
   moveZombie();
 }
 
@@ -280,6 +282,7 @@ function loseHeart(){
       jumpScareImg.style.zIndex="1";
       jumpScareImg.style.objectFit="cover";
       document.body.appendChild(jumpScareImg);
+      // ✅ Restart by clicking the jumpscare
       jumpScareImg.addEventListener("click", restart);
     }
     showMessage("💀 GAME OVER 💀","red",0);
@@ -306,6 +309,5 @@ function restart(){
   walkingSound.play(); animateStickman(); spawnZombie();
 }
 </script>
-
 </body>
 </html>
