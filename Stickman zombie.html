@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dont Disturb Me</title>
+<style>
+  body { margin: 0; overflow: hidden; background: white; color: black; font-family: Arial, sans-serif; touch-action: manipulation; }
+
+  #title { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 50px; font-weight: bold; color: black; z-index: 15; text-align: center; }
+  #score { position: absolute; top: 20px; left: 30px; font-size: 40px; font-weight: bold; }
+  #bulletsTxt { position: absolute; top: 70px; left: 30px; font-size: 30px; font-weight: bold; }
+  #hearts { position: absolute; top: 120px; left: 30px; font-size: 30px; }
+  #bossHearts { position: absolute; font-size: 30px; color: red; display: none; text-align: center; }
+  #instructions { position: absolute; top: 20px; right: 20px; font-size: 18px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; }
+  #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; color: red; text-shadow: 2px 2px 10px black; display: none; z-index: 10; text-align: center; }
+
+  #stickman { position: absolute; bottom: 0px; transition: width 0.2s ease, bottom 0.2s ease; left: 100px; width: 500px; }
+  #zombie { position: absolute; bottom: 100px; transition: width 0.2s ease, bottom 0.2s ease; right: -150px; width: 250px; }
+
+  .laser { position: absolute; bottom: 370px; left: 200px; width: 250px; z-index: 1; animation: shoot 0.5s linear forwards; }
+  .range-bar { position: absolute; height: 10px; border-radius: 4px; opacity: 0.7; z-index: 5; }
+  .green-bar { background: green; }
+  .red-bar { background: red; }
+
+  .btn { position: fixed; padding: 20px; font-size: 20px; border-radius: 10px; background: black; color: white; border: none; z-index: 1000; }
+  #shootBtn { bottom: 20px; right: 20px; }
+  #restartBtn { display:none; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+
+  @keyframes shoot { from { left: 200px; opacity: 1; } to { left: 100%; opacity: 0; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+  #startOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); color:white; display:flex; justify-content:center; align-items:center; font-size:40px; z-index:2000; text-align:center; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="title">DONT DISTURB ME by Jake</div>
+<div id="score">Score: 0</div>
+<div id="bulletsTxt">Bullets: 5</div>
+<div id="hearts">❤️❤️❤️</div>
+<div id="bossHearts"></div>
+<div id="instructions">Press Q or Shoot Button to fire</div>
+<div id="msg"></div>
+
+<img id="stickman" src="stick1.png" />
+<img id="zombie" src="zombie.png" />
+
+<div id="greenBar" class="range-bar green-bar"></div>
+<div id="redBar" class="range-bar red-bar"></div>
+
+<button id="shootBtn" class="btn">Shoot</button>
+<button id="restartBtn" class="btn">Restart</button>
+
+<audio id="screamSound" src="scream.mp3"></audio>
+<audio id="walkingSound" src="walking.mp3" loop></audio>
+<audio id="shootSound" src="shoot.mp3"></audio>
+
+<div id="startOverlay">Tap to Start</div>
+
+<script>
+const stick = document.getElementById("stickman");
+const zombie = document.getElementById("zombie");
+const scoreTxt = document.getElementById("score");
+const bulletsTxt = document.getElementById("bulletsTxt");
+const heartsDiv = document.getElementById("hearts");
+const bossHeartsDiv = document.getElementById("bossHearts");
+const msg = document.getElementById("msg");
+const shootBtn = document.getElementById("shootBtn");
+const restartBtn = document.getElementById("restartBtn");
+const screamSound = document.getElementById("screamSound");
+const walkingSound = document.getElementById("walkingSound");
+const shootSound = document.getElementById("shootSound");
+const startOverlay = document.getElementById("startOverlay");
+
+let running = false, canShoot = true, shooting = false, score = 0, bullets = 5, hearts = 3;
+let reloading = false, zombieHitsRequired = 1, zombieSpeed = 3;
+let abnormalMode = false, bossMode = false, bulletsPerShot = 1, normalBulletsPerShot = 1;
+let reloadTime = 2000, normalReloadTime = 2000;
+let jumpScareImg = null, bossMaxHealth = 10, bossHealth = 0;
+let zombieMoveId = null;
+
+const walkFrames = ["stick1.png","stick2.png"];
+let walkIndex = 0;
+
+function animateStickman(){
+  if(!running) return;
+  if(!shooting){
+    stick.src = walkFrames[walkIndex];
+    stick.style.width = "400px";
+    stick.style.bottom = "40px";
+    walkIndex = (walkIndex+1) % walkFrames.length;
+  }
+  setTimeout(animateStickman,200);
+}
+
+startOverlay.addEventListener("click", () => {
+  startOverlay.style.display = "none";
+  running = true;
+  walkingSound.play().catch(()=>{});
+  animateStickman();
+  spawnZombie();
+});
+
+document.addEventListener("keydown", e => {
+  if(!running && e.key.toLowerCase()==='r') restart();
+  if(e.key.toLowerCase()==='q' && canShoot && running) shoot();
+});
+shootBtn.addEventListener("click", ()=>{ if(running) shoot(); });
+restartBtn.addEventListener("click", restart);
+
+function showMessage(text,color="red",duration=1500){
+  msg.textContent = text;
+  msg.style.color = color;
+  msg.style.display = "block";
+  if(duration>0) setTimeout(()=>msg.style.display="none",duration);
+}
+
+function updateHeartsDisplay(){
+  heartsDiv.textContent = "❤️".repeat(hearts) + " ".repeat(3 - hearts);
+}
+
+function updateBossHeartsDisplay(){
+  if(!bossMode){ bossHeartsDiv.style.display = "none"; return; }
+  bossHeartsDiv.style.display = "block";
+  bossHeartsDiv.textContent = "💖".repeat(bossHealth) + " ".repeat(bossMaxHealth - bossHealth);
+  const z = zombie.getBoundingClientRect();
+  bossHeartsDiv.style.left = (z.left + z.width/2 - (bossHeartsDiv.offsetWidth/2)) + "px";
+  bossHeartsDiv.style.top = (z.top - 40) + "px";
+}
+
+function shoot(){
+  if(!canShoot || reloading) return;
+  if(bullets<=0){ 
+    reloading=true; 
+    showMessage("Reloading...","yellow",reloadTime);
+    setTimeout(()=>{ bullets=5; bulletsTxt.textContent="Bullets: "+bullets; reloading=false; }, reloadTime);
+    return;
+  }
+
+  canShoot=false; shooting=true; walkingSound.pause();
+  stick.src="stick3.png"; stick.style.width="300px"; stick.style.bottom="100px";
+
+  for(let i=0;i<bulletsPerShot;i++){
+    if(bullets>0){
+      bullets--; bulletsTxt.textContent="Bullets: "+bullets;
+      shootSound.currentTime=0; shootSound.play();
+
+      const laser=document.createElement("img");
+      laser.src="laser.png"; laser.className="laser";
+      document.body.appendChild(laser);
+
+      const z = zombie.getBoundingClientRect();
+      const explosion = document.createElement("img");
+      explosion.src = "explosion.png";
+      explosion.style.position = "absolute";
+      explosion.style.left = (z.left + z.width / 2 - 300) + "px";
+      explosion.style.top = (z.top + z.height / 2 - 300) + "px";
+      explosion.style.width = "600px";
+      explosion.style.zIndex = "10";
+      explosion.style.pointerEvents = "none";
+      document.body.appendChild(explosion);
+      setTimeout(()=>explosion.remove(),150);
+
+      let knockback = parseInt(zombie.style.right) - 80;
+      if(knockback < -150) knockback = -150;
+      zombie.style.right = knockback + "px";
+      setTimeout(()=>laser.remove(),500);
+    }
+  }
+
+  const s = stick.getBoundingClientRect();
+  const z = zombie.getBoundingClientRect();
+  const dist = z.left - s.right;
+  const screenW = window.innerWidth;
+  const closeness = 1-(dist/screenW);
+
+  if(bossMode){
+    bossHealth -= 2;
+    if(bossHealth < 0) bossHealth = 0;
+    updateBossHeartsDisplay();
+    if(bossHealth <= 0) killZombie();
+  } else {
+    if(!abnormalMode && closeness < 0.8 && Math.random() < 0.2){
+        abnormalMode = true;
+        zombieSpeed = 1;
+        zombie.style.width = "400px";
+        zombie.style.bottom = "-50px";
+        zombie.style.filter = "drop-shadow(0 0 15px red)";
+        setTimeout(()=>{
+            abnormalMode = false;
+            zombieSpeed = 3;
+            zombie.style.width = "250px";
+            zombie.style.bottom = "100px";
+            zombie.style.filter = "";
+        },3000);
+    } else {
+        zombieHitsRequired--; 
+        if(zombieHitsRequired<=0) killZombie();
+    }
+  }
+
+  setTimeout(()=>{
+    shooting=false;
+    stick.style.width="500px";
+    stick.style.bottom="100px";
+    canShoot=true;
+    if(running) walkingSound.play();
+  },2000);
+}
+
+function killZombie(){
+  cancelAnimationFrame(zombieMoveId);
+  zombie.style.animation="fadeOut 0.3s forwards";
+  setTimeout(()=>{
+    score++; scoreTxt.textContent="Score: "+score;
+
+    if(score % 10 === 0){ // ✅ Every 10 points spawn boss
+      bossMode=true; abnormalMode=true;
+      zombieSpeed=2; bossMaxHealth=8; bossHealth=bossMaxHealth;
+      zombieHitsRequired=1; bulletsPerShot=3;
+      zombie.style.width="500px"; zombie.style.bottom="-50px";
+      zombie.style.filter="drop-shadow(0 0 15px red)";
+      showMessage("⚠️ ABNORMAL ZOMBIES INCOMING!","red",2000);
+      setTimeout(()=>showMessage("2X DAMAGE ACTIVATED!","orange",2000),2000);
+      updateBossHeartsDisplay();
+    } else {
+      bossMode=false; abnormalMode=false;
+      zombieSpeed=3;
+      zombieHitsRequired=1;
+      bulletsPerShot = normalBulletsPerShot;
+      reloadTime = normalReloadTime;
+      zombie.style.width="250px"; zombie.style.bottom="100px"; zombie.style.filter="";
+      bossHeartsDiv.style.display = "none";
+    }
+    spawnZombie();
+  },400);
+}
+
+function spawnZombie(){
+  cancelAnimationFrame(zombieMoveId);
+  zombie.style.animation="";
+  zombie.style.opacity=1;
+  zombie.style.right="-150px";
+
+  // ✅ Reset health requirement every new normal zombie
+  if (!bossMode) zombieHitsRequired = 1;
+
+  moveZombie();
+}
+
+function moveZombie(){
+  if(!running) return;
+  let zRight=parseInt(getComputedStyle(zombie).right);
+  zombie.style.right=(zRight+zombieSpeed)+"px";
+  if(bossMode) updateBossHeartsDisplay();
+
+  const s = stick.getBoundingClientRect();
+  const z = zombie.getBoundingClientRect();
+  if(z.left < s.right-50){ loseHeart(); return; }
+  if(parseInt(zombie.style.right)<window.innerWidth+150)
+    zombieMoveId = requestAnimationFrame(moveZombie);
+}
+
+function loseHeart(){
+  cancelAnimationFrame(zombieMoveId);
+  hearts--; updateHeartsDisplay(); showMessage("💔 You got hit!","red",1500);
+
+  if(hearts <= 0){
+    running=false; walkingSound.pause();
+    screamSound.currentTime=0; screamSound.play();
+
+    if(!jumpScareImg){
+      jumpScareImg=document.createElement("img");
+      jumpScareImg.src="jump_scare.png";
+      jumpScareImg.style.position="fixed";
+      jumpScareImg.style.top="0";
+      jumpScareImg.style.left="0";
+      jumpScareImg.style.width="100%";
+      jumpScareImg.style.height="100%";
+      jumpScareImg.style.zIndex="1";
+      jumpScareImg.style.objectFit="cover";
+      document.body.appendChild(jumpScareImg);
+      jumpScareImg.addEventListener("click", restart);
+    }
+    showMessage("💀 GAME OVER 💀","red",0);
+  } else {
+    zombie.style.right="-150px";
+    zombie.style.opacity=1;
+    zombieSpeed=3;
+    spawnZombie();
+  }
+}
+
+function restart(){
+  cancelAnimationFrame(zombieMoveId);
+  score = 0; scoreTxt.textContent="Score: 0"; bullets=5; bulletsTxt.textContent="Bullets: "+bullets;
+  hearts=3; updateHeartsDisplay(); running=true;
+  abnormalMode=false; bossMode=false;
+  bulletsPerShot=normalBulletsPerShot; reloadTime=normalReloadTime;
+  zombie.style.width="250px"; zombie.style.bottom="100px";
+  zombie.style.right="-150px"; zombie.style.filter=""; zombie.style.opacity=1;
+  zombieHitsRequired=1; zombieSpeed=3;
+  stick.style.width="500px"; stick.style.bottom="100px";
+  if(jumpScareImg){ jumpScareImg.remove(); jumpScareImg=null; }
+  msg.style.display="none"; bossHeartsDiv.style.display="none";
+  walkingSound.play(); animateStickman(); spawnZombie();
+}
+</script>
+
+</body>
+</html>
